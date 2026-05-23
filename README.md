@@ -1,4 +1,4 @@
-# 🎓 AI Study Companion: Agentic RAG for Education
+# 🎓 Sage — Agentic RAG Tutor for NCERT
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Stack](https://img.shields.io/badge/Tech-LangChain%20%7C%20ChromaDB%20%7C%20Llama3-green)
@@ -191,7 +191,7 @@ If I had more time, I would implement:
     * **Why:** To help educators track student progress.
     * **How:** Visualize "Most Asked Questions" and "Confusing Topics" using Streamlit charts.
 
-**Built by Kabeer Sanan for the Cograd AI Intern role**
+**Built by Kabeer Sanan**
 
 
 
