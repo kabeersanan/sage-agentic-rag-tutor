@@ -3,4 +3,4 @@
 __pycache__/
 venv/
 .DS_Store
-data/vector_store/  # Don't push the actual database binary
+data/vector_store/
