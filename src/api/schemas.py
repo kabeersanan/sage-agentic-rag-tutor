@@ -7,7 +7,7 @@ class Source(BaseModel):
     preview: str
 
 class QueryRequest(BaseModel):
-    query: str = Field(..., example="Explain the chlor-alkali process")
+    query: str = Field(..., json_schema_extra={"example": "Explain the chlor-alkali process"})
     history: Optional[List[List[str]]] = Field(default_factory=list, description="List of [role, message] pairs")
 
 class QuizQuestion(BaseModel):

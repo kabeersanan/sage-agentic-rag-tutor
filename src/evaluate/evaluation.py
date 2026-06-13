@@ -7,34 +7,35 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(os.path.dirname(current_dir))
 sys.path.append(root_dir)
 
-from src.database.vector_store import load_vector_db
+from src.database.retriever import get_vector_store
 
 def evaluate_retrieval(test_queries):
     """
     Runs a set of queries against the Vector Database and measures:
     1. Retrieval Speed (Latency)
-    2. Average Confidence Score (Normalized for L2 Distance)
+    2. Average Confidence Score (raw cosine similarity, higher is better)
     """
     print("Starting Retrieval Evaluation System...\n")
-    
+
     try:
-        db = load_vector_db()
+        db = get_vector_store()
     except Exception as e:
         print(f"Error: Could not load database. Run main.py first. Details: {e}")
         return
 
     total_score = 0
     total_time = 0
-    
+
     print(f"{'QUERY':<50} | {'CONFIDENCE':<12} | {'SOURCE (Page)':<20}")
 
     for query in test_queries:
         start_time = time.time()
-        
-        # Get top 3 results with scores
-        # Note: ChromaDB returns L2 DISTANCE by default (Lower is Better)
+
+        # Get top 3 results with scores.
+        # Qdrant returns COSINE SIMILARITY (range ~0-1, HIGHER is better),
+        # unlike ChromaDB's L2 distance. The top hit is results[0].
         results = db.similarity_search_with_score(query, k=3)
-        
+
         end_time = time.time()
         latency = end_time - start_time
         total_time += latency
@@ -44,16 +45,17 @@ def evaluate_retrieval(test_queries):
             continue
 
         best_doc, best_score = results[0]
-        
-        # Normalize L2 distance to a 0-100 percentage score.
-        confidence = round((1 / (1 + best_score)) * 100, 2)
-        
+
+        # Cosine similarity is already a 0-1 relevance score, so map it
+        # directly to a 0-100 percentage (no L2 normalization needed).
+        confidence = round(best_score * 100, 2)
+
         # Get metadata
         source = best_doc.metadata.get('source', 'Unknown').split('/')[-1]
         page = best_doc.metadata.get('page', '??')
 
         print(f"{query[:47]:<50} ... | {confidence}%      | {source} (p.{page})")
-        
+
         total_score += confidence
 
     # Summary Metrics
@@ -75,12 +77,12 @@ def evaluate_retrieval(test_queries):
 if __name__ == "__main__":
     # Test Queries tailored to your specific content
     sample_queries = [
-        "When was the pH scale introduced?", 
-        "What is the meaning of water of crystallization?", 
-        "Who proposed the Arrhenius theory of acids and bases?", 
-        "Why does distilled water not conduct electricity?", 
-        "Describe the Chlor-alkali process.", 
+        "When was the pH scale introduced?",
+        "What is the meaning of water of crystallization?",
+        "Who proposed the Arrhenius theory of acids and bases?",
+        "Why does distilled water not conduct electricity?",
+        "Describe the Chlor-alkali process.",
         "What did the reaction of metal carbonates with acids produce?"
     ]
-    
+
     evaluate_retrieval(sample_queries)

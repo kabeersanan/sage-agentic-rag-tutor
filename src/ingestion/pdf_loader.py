@@ -2,6 +2,28 @@ import os
 from langchain_community.document_loaders import PyPDFLoader
 from src.config import DATA_DIR
 
+def load_single_document(file_path):
+    """
+    Loads a single PDF file. Used when a user uploads one new chapter so we
+    ingest only that file instead of re-processing the whole data directory
+    (which would create duplicate vectors for already-ingested PDFs).
+
+    Returns:
+        List[Document]: One Document per page, or [] on failure.
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    try:
+        print(f" - Loading single file: {os.path.basename(file_path)}")
+        loader = PyPDFLoader(file_path)
+        docs = loader.load()
+        print(f"Successfully loaded {len(docs)} pages.")
+        return docs
+    except Exception as e:
+        print(f"Error loading {file_path}: {e}")
+        return []
+
 def load_documents():
     """
     Scans the configured data directory and loads all PDF documents.

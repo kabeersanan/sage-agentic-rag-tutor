@@ -19,7 +19,7 @@ def clean_json_text(text):
         return match.group(1).strip()
     return text
 
-def generate_quiz(query, context):
+async def generate_quiz(query, context):
     """
     Generates a structured JSON quiz.
     Returns a Python List of Dictionaries.
@@ -39,8 +39,8 @@ def generate_quiz(query, context):
     chain = prompt | llm
 
     try:
-        # getting raw response first
-        raw_response = chain.invoke({
+        # getting raw response first (ainvoke = non-blocking network call)
+        raw_response = await chain.ainvoke({
             "query": query,
             "context": context
         })

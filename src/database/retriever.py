@@ -1,63 +1,55 @@
-from langchain_chroma import Chroma
-from langchain_community.retrievers import BM25Retriever
-from langchain_classic.retrievers import EnsembleRetriever
+import os
+from langchain_qdrant import QdrantVectorStore
+from qdrant_client.http import models
 from src.database.vector_store import get_embedding_function
-from src.config import DB_DIR
+from src.config import QDRANT_COLLECTION_NAME as COLLECTION_NAME
+from src.config import SIMILARITY_THRESHOLD
 
-def get_retriever(k=3):
+def get_vector_store():
     """
-    Creates a HYBRID retriever that combines Semantic Search (Vector) 
-    with Keyword Search (BM25).
-    
-    Args:
-        k (int): Number of chunks to retrieve (Assignment asks for 3-5).
-        
-    Returns:
-        EnsembleRetriever: A robust retriever combining two strategies.
+    Returns a QdrantVectorStore bound to the cloud collection. Use its
+    similarity_search_with_score() to get RAW cosine scores, which we filter
+    with SIMILARITY_THRESHOLD ourselves — langchain's built-in score_threshold
+    re-normalizes scores opaquely and can't be trusted for a hard cutoff.
     """
-    embedding_fn = get_embedding_function()
-    
-    # 1. Initialize Vector Store (Semantic Search)
-    vector_store = Chroma(
-        persist_directory=DB_DIR,
-        embedding_function=embedding_fn
+    return QdrantVectorStore.from_existing_collection(
+        embedding=get_embedding_function(),
+        collection_name=COLLECTION_NAME,
+        url=os.getenv("QDRANT_URL"),
+        api_key=os.getenv("QDRANT_API_KEY"),
     )
-    
-    # Reconstruction for Hybrid Search
-    # To use BM25 (Keyword Search), we need the raw text of the chunks.
-    # Instead of re-reading PDFs, we pull the text directly from our Vector DB.
-    try:
-        # Fetch all stored documents from Chroma
-        data = vector_store.get() 
-        texts = data['documents']
-        metadatas = data['metadatas']
-        
-        if not texts:
-            print(" Warning: Vector DB is empty. utilizing fallback.")
-            return vector_store.as_retriever(search_kwargs={"k": k})
 
-        # 2. Initialize BM25 Retriever (Keyword Search)
-        # This catches specific terms like "Fe2O3" or "displacement" that vectors might miss.
-        bm25_retriever = BM25Retriever.from_texts(texts, metadatas=metadatas)
-        bm25_retriever.k = k
+async def aretrieve_relevant(vector_store, query, k=4, threshold=SIMILARITY_THRESHOLD):
+    """
+    Retrieve up to k chunks whose RAW cosine similarity >= threshold.
+    Returns [] when nothing is relevant, so callers can refuse to answer
+    instead of feeding the LLM near-random context.
+    """
+    pairs = await vector_store.asimilarity_search_with_score(query, k=k)
+    return [doc for doc, score in pairs if score >= threshold]
 
-        # 3. Initialize Standard Vector Retriever
-        chroma_retriever = vector_store.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": k}
+def get_retriever(k=4, student_id=None):
+    embedding_fn = get_embedding_function()
+
+    # Connect to the existing cloud collection
+    vector_store = QdrantVectorStore.from_existing_collection(
+        embedding=embedding_fn,
+        collection_name=COLLECTION_NAME,
+        url=os.getenv("QDRANT_URL"),
+        api_key=os.getenv("QDRANT_API_KEY"),
+    )
+
+    search_kwargs = {"k": k}
+
+    # Apply metadata filtering if a student_id is provided
+    if student_id:
+        search_kwargs["filter"] = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="metadata.student_id",
+                    match=models.MatchValue(value=student_id),
+                )
+            ]
         )
 
-        # 4. Create Ensemble (Hybrid) Retriever
-        # Weighting: 50% Semantic (Concepts) + 50% Keyword (Precision)
-        ensemble_retriever = EnsembleRetriever(
-            retrievers=[bm25_retriever, chroma_retriever],
-            weights=[0.5, 0.5]
-        )
-        
-        print(f"Hybrid Retriever initialized (BM25 + Chroma) with k={k}")
-        return ensemble_retriever
-
-    except Exception as e:
-        print(f" Error initializing Hybrid Search: {e}")
-        print("Falling back to standard Vector Search.")
-        return vector_store.as_retriever(search_kwargs={"k": k})
+    return vector_store.as_retriever(search_kwargs=search_kwargs)

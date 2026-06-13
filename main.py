@@ -1,5 +1,6 @@
 import os
 import sys
+import asyncio
 import logging
 
 # Configure basic logging
@@ -70,18 +71,20 @@ def main():
                 logging.info(f"  {i+1}. [Page {page}] Topic: {topic}...")
 
             context_text = format_docs_for_agent(retrieved_docs)
-            intent = route_query(query).strip().upper()
-            
+            # Agent functions are async; asyncio.run executes each on a one-off
+            # event loop so this synchronous CLI can still call them.
+            intent = asyncio.run(route_query(query)).strip().upper()
+
             if "QUIZ" in intent:
                 logging.info(f"Generating Quiz on: {query}")
-                response = generate_quiz(query, context_text)
-            
+                response = asyncio.run(generate_quiz(query, context_text))
+
             elif "CHAT" in intent:
                 response = "Hello. I am your AI Tutor. Ask me anything about your Class 10 chapter."
-            
+
             else:
                 logging.info("Generating Explanation...")
-                response = generate_explanation(query, context_text, chat_history)
+                response = asyncio.run(generate_explanation(query, context_text, chat_history))
 
             chat_history.append((query, response))
             if len(chat_history) > 3:
