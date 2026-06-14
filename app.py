@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 import streamlit as st
 import requests
 
@@ -18,22 +17,22 @@ st.markdown("""
 #   3. 127.0.0.1 local fallback — use 127.0.0.1 not "localhost" to match
 #      uvicorn's IPv4 bind; on Windows "localhost" can resolve to IPv6 (::1)
 #      and fail to connect even when the backend is running fine.
-# We only read st.secrets if a secrets.toml actually exists, because accessing
-# st.secrets with no file present makes Streamlit render a "No secrets files
-# found" error in the UI (a caught exception doesn't suppress that display).
 def _resolve_backend():
+    # 1. Env var
     env_url = os.environ.get("BACKEND_URL")
     if env_url:
         return env_url
-    secret_paths = [
-        Path.home() / ".streamlit" / "secrets.toml",
-        Path(".streamlit") / "secrets.toml",
-    ]
-    if any(p.exists() for p in secret_paths):
-        try:
-            return st.secrets["BACKEND_URL"]
-        except Exception:
-            pass
+    # 2. Streamlit Cloud secret. Accessing st.secrets when no secrets file
+    #    exists (e.g. local dev) raises, so we catch and fall through to the
+    #    local default. On Streamlit Cloud the dashboard secret is injected and
+    #    this returns the configured backend URL.
+    try:
+        secret_url = st.secrets["BACKEND_URL"]
+        if secret_url:
+            return secret_url
+    except Exception:
+        pass
+    # 3. Local fallback
     return "http://127.0.0.1:8000"
 
 BACKEND = _resolve_backend()
