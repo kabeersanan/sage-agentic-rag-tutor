@@ -32,10 +32,10 @@ def build_no_context_message():
     if docs:
         listed = "\n".join(f"- {d}" for d in docs)
         return (
-            f"{base}\n\n**Currently loaded chapters:**\n{listed}\n\n"
+            f"{base}\n\n**Currently loaded notes:**\n{listed}\n\n"
             "Try asking about one of these, or upload the relevant PDF."
         )
-    return f"{base}\n\nNo chapters are loaded yet — upload a PDF to get started."
+    return f"{base}\n\nNo notes are loaded yet — upload a PDF to get started."
 
 # Vector store handle, initialized lazily (None = knowledge base not ready).
 _vector_store = None

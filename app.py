@@ -2,7 +2,7 @@ import os
 import streamlit as st
 import requests
 
-st.set_page_config(page_title="AI Tutor | Class 10 Science", layout="wide")
+st.set_page_config(page_title="Sage | Adaptive RAG Tutor", page_icon="🦉", layout="wide")
 
 st.markdown("""
 <style>
@@ -42,7 +42,7 @@ KB_URL = f"{BACKEND}/knowledge-base"
 HEALTH_URL = f"{BACKEND}/health"
 
 with st.sidebar:
-    st.title("AI Tutor Settings")
+    st.title("🦉 Sage · Settings")
     st.divider()
     st.markdown("**System Status**")
 
@@ -63,11 +63,11 @@ with st.sidebar:
             kb = requests.get(KB_URL, timeout=15).json()
             docs = kb.get("documents", [])
             if docs:
-                st.success(f"Chapters loaded: {len(docs)} ({kb.get('chunk_count', 0)} chunks)")
+                st.success(f"Notes loaded: {len(docs)} ({kb.get('chunk_count', 0)} chunks)")
                 for d in docs:
                     st.caption(f"📄 {d}")
             else:
-                st.warning("No chapters loaded yet. Upload a PDF below.")
+                st.warning("No notes loaded yet. Upload a PDF below.")
         except requests.exceptions.RequestException:
             st.caption("(Couldn't load chapter list — backend is busy.)")
     st.divider()
@@ -75,7 +75,7 @@ with st.sidebar:
     # PDF upload: lets a student add a new chapter without touching the code.
     # The file is sent to the backend's /upload endpoint, which ingests it into
     # Qdrant in the background.
-    st.markdown("**Add a Chapter (PDF)**")
+    st.markdown("**Add Notes (PDF)**")
     uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"], label_visibility="collapsed")
     if uploaded_file is not None:
         if st.button("Add to Knowledge Base"):
@@ -110,21 +110,64 @@ with st.sidebar:
                     st.error(f"Delete failed: {e}")
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Hello! I am your AI Tutor. Ask me to **explain a concept** or **give you a quiz**.", "type": "text"}]
+    st.session_state.messages = [{"role": "assistant", "content": "Hi, I'm **Sage** 🦉 — upload your notes, then ask me to **explain a concept** or **quiz you**.", "type": "text"}]
 
-st.title("AI Science Tutor")
-st.caption("Powered by Decoupled Agentic RAG")
+st.title("🦉 Sage — Adaptive RAG Tutor")
+st.caption("Learn from your own notes · powered by Adaptive RAG")
+
+def render_quiz(quiz, qid):
+    """
+    Interactive MCQ quiz. Options start UNSELECTED (index=None) and the answers
+    are revealed only after the user submits — so it behaves like a real quiz
+    instead of pre-selecting "A" and leaking the answer on the first click.
+    Widgets live inside an st.form, so picking options does NOT trigger reruns;
+    only "Submit Answers" does. `qid` (the message's stable list index) keeps the
+    widget keys unique and stable across reruns.
+    """
+    done_key = f"quiz_done_{qid}"
+    done = st.session_state.get(done_key, False)
+
+    with st.form(key=f"quizform_{qid}"):
+        st.write("**Quiz** — pick an answer for each question, then submit.")
+        for idx, q in enumerate(quiz):
+            st.radio(
+                f"**Q{idx + 1}: {q['question']}**",
+                q["options"],
+                index=None,
+                key=f"quiz_{qid}_{idx}",
+                disabled=done,
+            )
+        submitted = st.form_submit_button("Submit Answers", disabled=done)
+
+    if submitted:
+        st.session_state[done_key] = True
+        done = True
+
+    if done:
+        score = 0
+        for idx, q in enumerate(quiz):
+            chosen = st.session_state.get(f"quiz_{qid}_{idx}")
+            answer_letter = str(q.get("answer", "")).strip().upper()
+            # Options look like "C. It forms white powder"; the answer is just "C".
+            correct_option = next(
+                (o for o in q["options"] if o.strip().upper().startswith(answer_letter)),
+                q.get("answer", ""),
+            )
+            if chosen is not None and chosen == correct_option:
+                score += 1
+                st.success(f"Q{idx + 1}: Correct ✅  ({correct_option})")
+            else:
+                st.error(f"Q{idx + 1}: Your answer — {chosen if chosen else 'none selected'}")
+                st.info(f"Correct answer: {correct_option}")
+            st.caption(f"Explanation: {q['explanation']}")
+        st.markdown(f"### Score: {score} / {len(quiz)}")
+
 
 # Render chat history
-for msg in st.session_state.messages:
+for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
         if msg.get("type") == "quiz":
-            st.write("**Quiz Generated**")
-            for idx, q in enumerate(msg["content"]):
-                with st.expander(f"Q{idx+1}: {q['question']}", expanded=True):
-                    st.radio("Options:", q['options'], key=f"hist_q_{idx}_{len(st.session_state.messages)}")
-                    st.success(f"Correct Answer: {q['answer']}")
-                    st.info(f"Explanation: {q['explanation']}")
+            render_quiz(msg["content"], qid=i)
         else:
             st.markdown(msg["content"])
             if "sources" in msg and msg["sources"]:
@@ -133,7 +176,7 @@ for msg in st.session_state.messages:
                         st.markdown(f"- **Page {s['page']}** ({s['topic']}): _{s['preview']}_")
 
 # Handle new user input
-if prompt := st.chat_input("Ask about chemical reactions, equations, or request a quiz..."):
+if prompt := st.chat_input("Ask a question about your notes, or say 'quiz me'..."):
     st.session_state.messages.append({"role": "user", "content": prompt, "type": "text"})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -161,24 +204,24 @@ if prompt := st.chat_input("Ask about chemical reactions, equations, or request 
                 # error fallback — and iterating that string would crash with
                 # "string indices must be integers".
                 if "QUIZ" in intent and isinstance(response_content, list) and response_content:
-                    st.write("**Quiz generated based on your request.**")
-                    for idx, q in enumerate(response_content):
-                        with st.expander(f"Q{idx+1}: {q['question']}", expanded=True):
-                            st.radio("Select an option:", q['options'], key=f"live_q_{idx}")
-                            st.caption("*(Answer revealed in history)*")
-
+                    # Store the quiz, then rerun so the history loop renders it
+                    # through the single interactive path (render_quiz: a form
+                    # with unselected options + a Submit button). Rendering it
+                    # inline here too would create a second, divergent copy of
+                    # the quiz widgets that leaks the answer on first click.
                     st.session_state.messages.append({
                         "role": "assistant",
                         "content": response_content,
                         "type": "quiz",
                         "sources": sources
                     })
+                    st.rerun()
                 else:
                     # Coerce non-string payloads (e.g. an empty quiz list from a
                     # generation error) into a readable message so st.markdown
                     # never receives a list.
                     text = response_content if isinstance(response_content, str) else \
-                        "Sorry, I couldn't generate a response for that. Try a topic from the loaded chapters."
+                        "Sorry, I couldn't generate a response for that. Try a topic from your loaded notes."
                     st.markdown(text)
                     if sources:
                         with st.expander("Sources Used"):

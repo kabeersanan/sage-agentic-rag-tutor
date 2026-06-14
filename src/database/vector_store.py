@@ -1,4 +1,5 @@
 import os
+import re
 # Using Local Embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from qdrant_client import QdrantClient
@@ -130,7 +131,10 @@ def get_knowledge_base_stats():
         for p in points:
             src = (p.payload or {}).get("metadata", {}).get("source")
             if src:
-                sources.add(os.path.basename(src))
+                # Strip BOTH path separators: files ingested on Windows store
+                # backslash paths, but os.path.basename on Render's Linux won't
+                # split on "\", leaving an ugly "data\raw\file.pdf".
+                sources.add(re.split(r"[\\/]", src)[-1])
         if offset is None:   # no more pages
             break
 
