@@ -112,7 +112,7 @@ with st.sidebar:
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hi, I'm **Sage** 🦉 — upload your notes, then ask me to **explain a concept** or **quiz you**.", "type": "text"}]
 
-st.title("🦉 Sage — Adaptive RAG Tutor")
+st.title("🦉 Sage: Adaptive RAG Tutor")
 st.caption("Learn from your own notes · powered by Adaptive RAG")
 
 def render_quiz(quiz, qid):
